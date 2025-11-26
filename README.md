@@ -1,50 +1,52 @@
-# Welcome to your Expo app 👋
+# NebulaNet 🌌
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI-powered social media platform with real-time features, content moderation, and admin dashboard.
 
-## Get started
+## 🚧 Current Status
+This project has some TypeScript and ESLint errors that need fixing. Looking for contributors to help resolve these issues!
 
-1. Install dependencies
+## Known Issues
+- TypeScript errors in multiple components
+- ESLint configuration issues
+- Missing type definitions
+- Component prop mismatches
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
+- Expo Router
+- React Native
+- TypeScript
+- Supabase
+- Tailwind CSS
+- Lucide Icons
 
-2. Start the app
+## Getting Started
 
-   ```bash
-   npx expo start
-   ```
+1. Clone the repo
+\`\`\`bash
+git clone https://github.com/yourusername/NebulaNet.git
+\`\`\`
 
-In the output, you'll find options to open the app in a
+2. Install dependencies
+\`\`\`bash
+npm install
+\`\`\`
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+3. Set up environment variables
+\`\`\`bash
+cp .env.example .env
+\`\`\`
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+4. Start the development server
+\`\`\`bash
+npx expo start
+\`\`\`
 
-## Get a fresh project
+## Issues Needed Help With
+- [ ] Fix TypeScript errors
+- [ ] Resolve ESLint import issues
+- [ ] Add missing type definitions
+- [ ] Fix navigation type errors
+- [ ] Complete UI component props
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Contributing
+Please check the Issues tab for specific bugs and feature requests. All help is appreciated!
