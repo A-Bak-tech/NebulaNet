@@ -1,52 +1,31 @@
 # NebulaNet 🌌
 
-AI-powered social media platform with real-time features, content moderation, and admin dashboard.
+> AI-powered social media platform with real-time features, content moderation, and admin dashboard.
 
-## 🚧 Current Status
-This project has some TypeScript and ESLint errors that need fixing. Looking for contributors to help resolve these issues!
+## 🚀 We Need Your Help!
 
-## Known Issues
-- TypeScript errors in multiple components
-- ESLint configuration issues
-- Missing type definitions
-- Component prop mismatches
+**Calling all React Native/TypeScript developers!** This project has a solid foundation but needs help fixing TypeScript errors and completing the authentication flow. Perfect for contributors looking to work on a modern social media app!
 
-## Tech Stack
-- Expo Router
-- React Native
-- TypeScript
-- Supabase
-- Tailwind CSS
-- Lucide Icons
+### 🎯 Immediate Help Needed
 
-## Getting Started
+- 🔧 **TypeScript Errors** - Various components need type fixes
+- 🎨 **UI Components** - Complete Button, Input, and other UI components  
+- 🔐 **Auth Flow** - Implement waitlist → invite → approval flow
+- 📱 **Expo Router** - Fix navigation and routing issues
+- 🐛 **ESLint Issues** - Clean up imports and configuration
 
-1. Clone the repo
-\`\`\`bash
-git clone https://github.com/yourusername/NebulaNet.git
-\`\`\`
+### 🛠 Tech Stack
+- **Frontend**: Expo Router, React Native, TypeScript
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React Native
+- **Backend**: Supabase (Auth + Database)
+- **State**: React Context + Hooks
 
-2. Install dependencies
-\`\`\`bash
+### 🚀 Quick Start
+
+```bash
+# Clone & setup
+git clone https://github.com/A-Bak-tech/NebulaNet.git
+cd NebulaNet
 npm install
-\`\`\`
-
-3. Set up environment variables
-\`\`\`bash
-cp .env.example .env
-\`\`\`
-
-4. Start the development server
-\`\`\`bash
 npx expo start
-\`\`\`
-
-## Issues Needed Help With
-- [ ] Fix TypeScript errors
-- [ ] Resolve ESLint import issues
-- [ ] Add missing type definitions
-- [ ] Fix navigation type errors
-- [ ] Complete UI component props
-
-## Contributing
-Please check the Issues tab for specific bugs and feature requests. All help is appreciated!
