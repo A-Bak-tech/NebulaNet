@@ -1,13 +1,16 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
 
 # Expo
 .expo/
 dist/
 web-build/
 expo-env.d.ts
+.expo-shared/
 
 # Native
 .kotlin/
@@ -17,27 +20,111 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.keystore
 
 # Metro
 .metro-health-check*
 
-# debug
+# Debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# App Config - Contains sensitive project IDs
+app.json
 
-# typescript
+# Environment Files - NEVER commit these!
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+*.env
+!.env.example
+
+# TypeScript
 *.tsbuildinfo
 
+# Example/Template
 app-example
 
-# generated native folders
+# Generated Native Folders
 /ios
 /android
+
+# Supabase Local
+supabase/.branches/
+supabase/.temp/
+
+# Sensitive Configuration Files
+google-play-service-account.json
+apple-credentials.json
+service-account.json
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+.gradle/
+/build
+local.properties
+/captures
+.externalNativeBuild
+.cxx
+
+# iOS
+*.ipa
+Pods/
+*.xcworkspace
+!default.xcworkspace
+*.xcuserdata
+*.hmap
+DerivedData/
+*.xcarchive
+
+# Testing
+coverage/
+.nyc_output/
+jest-results.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Temporary Files
+*.tmp
+*.temp
+.cache/
+*.bak
+
+# EAS
+.eas/
+
+# AI/ML Models (if you add custom models later)
+*.h5
+*.pkl
+*.pth
+*.onnx
+
+# Database dumps (if testing locally)
+*.sql.gz
+*.dump
+
+# Documentation builds
+docs/_build/
+site/
