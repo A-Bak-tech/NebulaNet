@@ -1,31 +1,23 @@
-# NebulaNet 🌌
+### 👋 Looking for Skilled Contributors
 
-> AI-powered social media platform with real-time features, content moderation, and admin dashboard.
+**Requirements:**
+- Strong TypeScript experience
+- React Native/Expo expertise  
+- Familiarity with Supabase
+- Understanding of modern React patterns
 
-## 🚀 We Need Your Help!
+**Current priorities:**
+- Resolve TypeScript compilation errors
+- Complete authentication flow implementation
+- Fix component prop interfaces
+- Add comprehensive type definitions
 
-**Calling all React Native/TypeScript developers!** This project has a solid foundation but needs help fixing TypeScript errors and completing the authentication flow. Perfect for contributors looking to work on a modern social media app!
+**How to contribute:**
+1. Review open issues
+2. Fork and implement fixes
+3. Submit PR with tests
 
-### 🎯 Immediate Help Needed
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-- 🔧 **TypeScript Errors** - Various components need type fixes
-- 🎨 **UI Components** - Complete Button, Input, and other UI components  
-- 🔐 **Auth Flow** - Implement waitlist → invite → approval flow
-- 📱 **Expo Router** - Fix navigation and routing issues
-- 🐛 **ESLint Issues** - Clean up imports and configuration
-
-### 🛠 Tech Stack
-- **Frontend**: Expo Router, React Native, TypeScript
-- **Styling**: Tailwind CSS
-- **Icons**: Lucide React Native
-- **Backend**: Supabase (Auth + Database)
-- **State**: React Context + Hooks
-
-### 🚀 Quick Start
-
-```bash
-# Clone & setup
-git clone https://github.com/A-Bak-tech/NebulaNet.git
-cd NebulaNet
-npm install
-npx expo start
+Copyright (c) 2025 Alyssa Baker
