@@ -1,82 +1,188 @@
+// File: /components/layout/BottomNav.tsx
 import React from 'react';
-import { View, TouchableOpacity, Text } from 'react-native';
+import {
+  View,
+  TouchableOpacity,
+  Text,
+  Dimensions,
+} from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { Home, Search, PlusCircle, Bell, User } from 'lucide-react-native';
-import { cn } from '@/utils/helpers';
+import { SIZES, SPACING, isTablet, responsiveSize } from '../../constants/Layout';
+import { currentTheme } from '../../constants/Colors';
 
-export const BottomNav: React.FC = () => {
-  const pathname = usePathname();
+// Import icons (create these as SVG components)
+import HomeIcon from '../../assets/icons/home';
+import SearchIcon from '../../assets/icons/search';
+import PlusIcon from '../../assets/icons/plus';
+import BellIcon from '../../assets/icons/notification';
+import UserIcon from '../../assets/icons/user';
+
+// Import NotificationBadge
+import NotificationBadge from '../notifications/NotificationBadge';
+
+const { width } = Dimensions.get('window');
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ color: string; size: number }>;
+  route: string;
+  isSpecial?: boolean; // For the center "Create" button
+  withBadge?: boolean; // For notifications badge
+}
+
+const BottomNav = () => {
   const router = useRouter();
-
-  const navItems = [
-    {
-      icon: Home,
-      label: 'Home',
-      href: '/(tabs)',
-      matches: ['/(tabs)', '/(tabs)/index'],
+  const pathname = usePathname();
+  
+  const navItems: NavItem[] = [
+    { 
+      id: 'home', 
+      label: 'Home', 
+      icon: HomeIcon, 
+      route: '/(tabs)' 
     },
-    {
-      icon: Search,
-      label: 'Search',
-      href: '/(tabs)/search',
-      matches: ['/(tabs)/search'],
+    { 
+      id: 'search', 
+      label: 'Explore', 
+      icon: SearchIcon, 
+      route: '/(tabs)/search' 
     },
-    {
-      icon: PlusCircle,
-      label: 'Create',
-      href: '/(tabs)/create',
-      matches: ['/(tabs)/create'],
+    { 
+      id: 'create', 
+      label: '', 
+      icon: PlusIcon, 
+      route: '/(tabs)/create',
+      isSpecial: true 
     },
-    {
-      icon: Bell,
-      label: 'Notifications',
-      href: '/(tabs)/notifications',
-      matches: ['/(tabs)/notifications'],
+    { 
+      id: 'notifications', 
+      label: 'Notifications', 
+      icon: BellIcon, 
+      route: '/(tabs)/notifications',
+      withBadge: true 
     },
-    {
-      icon: User,
-      label: 'Profile',
-      href: '/(tabs)/profile',
-      matches: ['/(tabs)/profile'],
+    { 
+      id: 'profile', 
+      label: 'Profile', 
+      icon: UserIcon, 
+      route: '/(tabs)/profile' 
     },
   ];
-
-  const isActive = (item: typeof navItems[0]) => {
-    return item.matches.some(match => pathname === match);
+  
+  const isActive = (route: string) => {
+    return pathname === route || pathname.startsWith(route + '/');
   };
-
+  
+  // Calculate responsive sizes
+  const tabBarHeight = isTablet ? SIZES.BOTTOM_TAB_HEIGHT * 1.2 : SIZES.BOTTOM_TAB_HEIGHT;
+  const iconSize = isTablet ? SIZES.BOTTOM_TAB_ICON_SIZE * 1.2 : SIZES.BOTTOM_TAB_ICON_SIZE;
+  const createButtonSize = responsiveSize(56);
+  
   return (
-    <View className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 pb-8 pt-2">
-      <View className="flex-row justify-around items-center">
-        {navItems.map((item) => {
-          const active = isActive(item);
-          const Icon = item.icon;
-
+    <View 
+      style={{ 
+        height: tabBarHeight,
+        paddingBottom: SPACING.sm,
+      }}
+      className="flex-row border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md"
+    >
+      {navItems.map((item) => {
+        const active = isActive(item.route);
+        
+        if (item.isSpecial) {
+          // Center "Create" button (Twitter-like)
           return (
-            <TouchableOpacity
-              key={item.label}
-              onPress={() => router.push(item.href as any)}
-              className="items-center space-y-1 flex-1"
+            <View 
+              key={item.id}
+              className="flex-1 items-center justify-center relative"
             >
-              <Icon
-                size={24}
-                color={active ? '#0ea5e9' : '#6b7280'}
-                fill={active ? '#0ea5e9' : 'transparent'}
-              />
+              <TouchableOpacity
+                activeOpacity={0.7}
+                className="absolute -top-6"
+                style={{
+                  width: createButtonSize,
+                  height: createButtonSize,
+                }}
+                onPress={() => router.push(item.route as any)}
+              >
+                <View 
+                  className="flex-1 rounded-full bg-purple-600 dark:bg-purple-500 items-center justify-center shadow-lg"
+                  style={{
+                    shadowColor: '#7C3AED',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }}
+                >
+                  <item.icon 
+                    color="#FFFFFF" 
+                    size={iconSize * 1.2}
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+          );
+        }
+        
+        return (
+          <TouchableOpacity
+            key={item.id}
+            activeOpacity={0.7}
+            className="flex-1 items-center justify-center"
+            onPress={() => router.push(item.route as any)}
+          >
+            <View className="items-center relative">
+              {item.withBadge ? (
+                // Use NotificationBadge component for notifications
+                <NotificationBadge
+                  showCount={false}
+                  animated={true}
+                  onPress={() => router.push(item.route as any)}
+                />
+              ) : (
+                // Regular icon for other tabs
+                <item.icon
+                  color={active ? '#7C3AED' : '#64748B'}
+                  size={iconSize}
+                />
+              )}
+              
               <Text
-                className={cn(
-                  'text-xs',
+                style={{ 
+                  fontSize: responsiveSize(11),
+                  marginTop: SPACING.xs,
+                }}
+                className={`${
                   active
-                    ? 'text-primary-500 font-medium'
+                    ? 'text-purple-600 dark:text-purple-400 font-semibold'
                     : 'text-gray-500 dark:text-gray-400'
-                )}
+                }`}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
                 {item.label}
               </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              
+              {/* Active indicator dot */}
+              {active && !item.withBadge && (
+                <View 
+                  className="absolute -top-1"
+                  style={{
+                    width: responsiveSize(4),
+                    height: responsiveSize(4),
+                    borderRadius: responsiveSize(2),
+                    backgroundColor: '#7C3AED',
+                  }}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
+
+export default BottomNav;

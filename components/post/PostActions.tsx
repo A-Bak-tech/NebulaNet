@@ -1,84 +1,136 @@
+// components/post/PostActions.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Heart, MessageCircle, Share, Bookmark } from 'lucide-react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
+import { CommentIcon, EchoIcon, LikeIcon, ShareIcon } from '../../assets/icons';
+import { currentTheme } from '../../constants/Colors';
+import { SIZES, SPACING } from '../../constants/Layout';
 
 interface PostActionsProps {
   postId: string;
-  likeCount: number;
-  commentCount: number;
-  shareCount: number;
+  likesCount: number;
+  echoesCount: number;
+  commentsCount: number;
   isLiked: boolean;
-  isBookmarked?: boolean;
-  onLike: () => void;
-  onComment: () => void;
-  onShare: () => void;
-  onBookmark?: () => void;
+  isEchoed: boolean;
+  onLikePress: () => void;
+  onEchoPress: () => void;
+  onCommentPress: () => void;
+  onSharePress: () => void;
+  compact?: boolean;
 }
 
-export const PostActions: React.FC<PostActionsProps> = ({
-  likeCount,
-  commentCount,
-  shareCount,
+const PostActions: React.FC<PostActionsProps> = ({
+  postId,
+  likesCount,
+  echoesCount,
+  commentsCount,
   isLiked,
-  isBookmarked = false,
-  onLike,
-  onComment,
-  onShare,
-  onBookmark,
+  isEchoed,
+  onLikePress,
+  onEchoPress,
+  onCommentPress,
+  onSharePress,
+  compact = false,
 }) => {
-  return (
-    <View className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">
-      <View className="flex-row justify-between items-center">
-        <View className="flex-row items-center space-x-6">
-          {/* Like Button */}
-          <TouchableOpacity 
-            onPress={onLike}
-            className="flex-row items-center space-x-2"
-          >
-            <Heart 
-              size={20} 
-              fill={isLiked ? "#ef4444" : "transparent"}
-              color={isLiked ? "#ef4444" : "#6b7280"} 
-            />
-            <Text className="text-gray-600 dark:text-gray-400 text-sm">
-              {likeCount}
-            </Text>
-          </TouchableOpacity>
+  const ActionButton = ({
+    icon: Icon,
+    count,
+    isActive,
+    onPress,
+    activeColor = currentTheme.brand.primary,
+  }: {
+    icon: React.ComponentType<any>;
+    count: number;
+    isActive: boolean;
+    onPress: () => void;
+    activeColor?: string;
+  }) => (
+    <TouchableOpacity
+      className="flex-row items-center"
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Icon
+        size={compact ? SIZES.ICON.SM : SIZES.ICON.MD}
+        color={isActive ? activeColor : currentTheme.icon.secondary}
+        filled={isActive}
+      />
+      {count > 0 && !compact && (
+        <Text
+          className={`ml-2 ${
+            isActive ? 'text-brand-primary' : 'text-text-secondary'
+          }`}
+          style={{ fontSize: SIZES.BODY_SMALL }}
+        >
+          {count}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
 
-          {/* Comment Button */}
-          <TouchableOpacity 
-            onPress={onComment}
-            className="flex-row items-center space-x-2"
-          >
-            <MessageCircle size={20} color="#6b7280" />
-            <Text className="text-gray-600 dark:text-gray-400 text-sm">
-              {commentCount}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Share Button */}
-          <TouchableOpacity 
-            onPress={onShare}
-            className="flex-row items-center space-x-2"
-          >
-            <Share size={20} color="#6b7280" />
-            <Text className="text-gray-600 dark:text-gray-400 text-sm">
-              {shareCount}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Bookmark Button */}
-        {onBookmark && (
-          <TouchableOpacity onPress={onBookmark}>
-            <Bookmark 
-              size={20} 
-              fill={isBookmarked ? "#0ea5e9" : "transparent"}
-              color={isBookmarked ? "#0ea5e9" : "#6b7280"} 
-            />
-          </TouchableOpacity>
-        )}
+  if (compact) {
+    return (
+      <View className="flex-row justify-between max-w-[90%]">
+        <ActionButton
+          icon={CommentIcon}
+          count={commentsCount}
+          isActive={false}
+          onPress={onCommentPress}
+        />
+        <ActionButton
+          icon={EchoIcon}
+          count={echoesCount}
+          isActive={isEchoed}
+          onPress={onEchoPress}
+          activeColor={currentTheme.brand.secondary}
+        />
+        <ActionButton
+          icon={LikeIcon}
+          count={likesCount}
+          isActive={isLiked}
+          onPress={onLikePress}
+          activeColor={currentTheme.status.error}
+        />
+        <ActionButton
+          icon={ShareIcon}
+          count={0}
+          isActive={false}
+          onPress={onSharePress}
+        />
       </View>
+    );
+  }
+
+  return (
+    <View className="flex-row justify-between mt-4 max-w-[90%]">
+      <ActionButton
+        icon={CommentIcon}
+        count={commentsCount}
+        isActive={false}
+        onPress={onCommentPress}
+      />
+      <ActionButton
+        icon={EchoIcon}
+        count={echoesCount}
+        isActive={isEchoed}
+        onPress={onEchoPress}
+        activeColor={currentTheme.brand.secondary}
+      />
+      <ActionButton
+        icon={LikeIcon}
+        count={likesCount}
+        isActive={isLiked}
+        onPress={onLikePress}
+        activeColor={currentTheme.status.error}
+      />
+      <ActionButton
+        icon={ShareIcon}
+        count={0}
+        isActive={false}
+        onPress={onSharePress}
+      />
     </View>
   );
 };
+
+export default PostActions;

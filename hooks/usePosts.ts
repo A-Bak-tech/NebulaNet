@@ -1,60 +1,203 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Post } from '@/types/database';
-import { posts } from '@/lib/posts';
+// File: /hooks/usePosts.ts
+import { useState, useEffect, useCallback } from 'react';
+import { Post, PaginatedResponse } from '../types/app';
+import postsService from '../lib/posts';
+import { useAuth } from './useAuth';
 
-export const usePosts = () => {
-  const [feed, setFeed] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+interface UsePostsOptions {
+  userId?: string;
+  type?: 'posts' | 'likes' | 'echoes';
+  initialLimit?: number;
+  initialPage?: number;
+}
+
+export const usePosts = (options: UsePostsOptions = {}) => {
+  const { userId, type = 'posts', initialLimit = 20, initialPage = 1 } = options;
+  const { user } = useAuth();
+  
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(initialPage);
   const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const pageRef = useRef(page);
-  useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
-
-  const isLoadingRef = useRef(isLoading);
-  useEffect(() => {
-    isLoadingRef.current = isLoading;
-  }, [isLoading]);
-
-  const loadFeed = useCallback(async (reset = false) => {
-    if (isLoadingRef.current) return;
-
-    setIsLoading(true);
+  const loadPosts = useCallback(async (loadPage: number = 1, isRefresh = false) => {
     try {
-      const pageToFetch = reset ? 0 : pageRef.current;
-      const newPosts = await posts.getFeed(pageToFetch, 20);
-
-      if (reset) {
-        setFeed(newPosts);
-        setPage(1);
+      if (isRefresh) {
+        setRefreshing(true);
       } else {
-        setFeed(prev => [...prev, ...newPosts]);
-        setPage(prev => prev + 1);
+        setIsLoading(true);
       }
-
-      setHasMore(newPosts.length === 20);
-    } catch (error) {
-      console.error('Error loading feed:', error);
+      
+      setError(null);
+      
+      const response = await postsService.getPosts(loadPage, initialLimit, userId, type);
+      
+      if (response.success) {
+        const { data, has_more } = response.data;
+        
+        if (isRefresh || loadPage === 1) {
+          setPosts(data);
+        } else {
+          setPosts(prev => [...prev, ...data]);
+        }
+        
+        setHasMore(has_more);
+        setPage(loadPage);
+      } else {
+        setError(response.error || 'Failed to load posts');
+      }
+    } catch (err: any) {
+      console.error('Error loading posts:', err);
+      setError(err.message || 'Failed to load posts');
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, [userId, type, initialLimit]);
+
+  const refreshPosts = useCallback(() => {
+    return loadPosts(1, true);
+  }, [loadPosts]);
+
+  const loadMore = useCallback(() => {
+    if (!isLoading && hasMore) {
+      loadPosts(page + 1);
+    }
+  }, [isLoading, hasMore, page, loadPosts]);
+
+  const likePost = useCallback(async (postId: string) => {
+    try {
+      const response = await postsService.likePost(postId);
+      
+      if (response.success) {
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              is_liked: response.data?.liked || false,
+              likes_count: response.data?.likes_count || post.likes_count,
+            };
+          }
+          return post;
+        }));
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error liking post:', error);
+      throw error;
     }
   }, []);
 
-  const refreshFeed = () => {
-    loadFeed(true);
-  };
+  const echoPost = useCallback(async (postId: string) => {
+    try {
+      const response = await postsService.echoPost(postId);
+      
+      if (response.success) {
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              is_echoed: response.data?.echoed || false,
+              echoes_count: response.data?.echoes_count || post.echoes_count,
+            };
+          }
+          return post;
+        }));
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error echoing post:', error);
+      throw error;
+    }
+  }, []);
+
+  const bookmarkPost = useCallback(async (postId: string) => {
+    try {
+      const response = await postsService.bookmarkPost(postId);
+      
+      if (response.success) {
+        setPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              is_bookmarked: response.data?.bookmarked || false,
+            };
+          }
+          return post;
+        }));
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error bookmarking post:', error);
+      throw error;
+    }
+  }, []);
+
+  // Subscribe to new posts if viewing user's own posts
+  useEffect(() => {
+    if (!userId || userId !== user?.id) return;
+    
+    const unsubscribe = postsService.subscribeToUserPosts(userId, (newPost) => {
+      setPosts(prev => [newPost, ...prev]);
+    });
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [userId, user?.id]);
+
+  // Subscribe to post updates
+  useEffect(() => {
+    const unsubscribeFunctions: Array<() => void> = [];
+    
+    posts.forEach(post => {
+      const unsubscribe = postsService.subscribeToPostUpdates(post.id, {
+        onLikeUpdate: (likesCount) => {
+          setPosts(prev => prev.map(p => 
+            p.id === post.id ? { ...p, likes_count: likesCount } : p
+          ));
+        },
+        onEchoUpdate: (echoesCount) => {
+          setPosts(prev => prev.map(p => 
+            p.id === post.id ? { ...p, echoes_count: echoesCount } : p
+          ));
+        },
+        onCommentUpdate: (commentsCount) => {
+          setPosts(prev => prev.map(p => 
+            p.id === post.id ? { ...p, comments_count: commentsCount } : p
+          ));
+        },
+      });
+      
+      unsubscribeFunctions.push(unsubscribe);
+    });
+    
+    return () => {
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    };
+  }, [posts]);
 
   useEffect(() => {
-    loadFeed(true);
-  }, [loadFeed]);
+    loadPosts(1);
+  }, [loadPosts]);
 
   return {
-    feed,
+    posts,
     isLoading,
+    error,
     hasMore,
-    loadMore: () => loadFeed(false),
-    refresh: refreshFeed,
+    refreshing,
+    refreshPosts,
+    loadMore,
+    likePost,
+    echoPost,
+    bookmarkPost,
   };
 };
+
+export default usePosts;

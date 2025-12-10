@@ -1,3 +1,43 @@
+/* global.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* NebulaNet Custom Colors */
+:root {
+  --background: #0A0A0F;
+  --surface: #12121A;
+  --surface-light: #1A1A25;
+  --border: #2A2A3A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0B0;
+  --brand-primary: #7C3AED;
+  --brand-secondary: #3B82F6;
+  --status-success: #10B981;
+  --status-error: #EF4444;
+}
+
+/* Background Colors */
+.bg-background { background-color: var(--background); }
+.bg-surface { background-color: var(--surface); }
+.bg-surface-light { background-color: var(--surface-light); }
+
+/* Text Colors */
+.text-text-primary { color: var(--text-primary); }
+.text-text-secondary { color: var(--text-secondary); }
+.text-brand-primary { color: var(--brand-primary); }
+.text-brand-secondary { color: var(--brand-secondary); }
+.text-status-success { color: var(--status-success); }
+.text-status-error { color: var(--status-error); }
+
+/* Border Colors */
+.border-border { border-color: var(--border); }
+
+/* Brand Gradients */
+.bg-gradient-brand {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.bg-gradient-nebula {
+  background: linear-gradient(135deg, #7C3AED, #8B5CF6, #3B82F6);
+}

@@ -1,98 +1,213 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
-import { Mail, Users, Sparkles } from 'lucide-react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useAuth } from '../../hooks/useAuth';
+import { validateEmail } from '../../lib/auth';
 
 interface WaitlistFormProps {
-  onSuccess?: (email: string) => void;
+  onSuccess?: () => void;
+  showTitle?: boolean;
+  compact?: boolean;
 }
 
-export const WaitlistForm: React.FC<WaitlistFormProps> = ({ onSuccess }) => {
+const WaitlistForm: React.FC<WaitlistFormProps> = ({
+  onSuccess,
+  showTitle = true,
+  compact = false,
+}) => {
+  const { joinWaitlist } = useAuth();
+  
   const [email, setEmail] = useState('');
-  const [referralCode, setReferralCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [name, setName] = useState('');
+  const [reason, setReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email) return;
+    // Validate email
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
 
-    setIsLoading(true);
+    if (!validateEmail(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setIsSubmitted(true);
-      onSuccess?.(email);
-    } catch (error) {
-      console.error('Error joining waitlist:', error);
+      setIsSubmitting(true);
+
+      await joinWaitlist(email, name.trim() || undefined, reason.trim() || undefined);
+      
+      setIsSuccess(true);
+      setEmail('');
+      setName('');
+      setReason('');
+
+      if (onSuccess) {
+        onSuccess();
+      }
+
+      Alert.alert(
+        'Success!',
+        "You're on the waitlist! We'll notify you when you get access.",
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to join waitlist. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (isSubmitted) {
+  if (isSuccess && compact) {
     return (
-      <View className="items-center justify-center p-8">
-        <View className="bg-green-100 dark:bg-green-900 rounded-full p-4 mb-4">
-          <Sparkles size={48} color="#10b981" />
-        </View>
-        <Text className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
-          You&apos;re on the list!
-        </Text>
-        <Text className="text-gray-600 dark:text-gray-400 text-center mb-6">
-          We&apos;ve added {email} to our waitlist. We&apos;ll notify you when your spot is ready.
-        </Text>
-        <Text className="text-sm text-gray-500 dark:text-gray-400 text-center">
-          Position in line: #1,234
+      <View className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+        <Text className="text-green-800 dark:text-green-300 text-center font-medium">
+          ✓ You&apos;re on the waitlist!
         </Text>
       </View>
     );
   }
 
-  return (
-    <View className="w-full max-w-sm">
-      <View className="items-center mb-8">
-        <View className="bg-primary-100 dark:bg-primary-900 rounded-full p-3 mb-4">
-          <Users size={32} color="#0ea5e9" />
-        </View>
-        <Text className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
-          Join the Waitlist
-        </Text>
-        <Text className="text-gray-600 dark:text-gray-400 text-center">
-          Be among the first to experience NebulaNet. We&apos;re rolling out access gradually.
-        </Text>
+  if (compact) {
+    return (
+      <View className="space-y-3">
+        <TextInput
+          className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
+          placeholder="Enter your email"
+          placeholderTextColor="#9CA3AF"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          editable={!isSubmitting}
+        />
+        
+        <TouchableOpacity
+          className={`bg-purple-600 rounded-lg py-3 ${isSubmitting ? 'opacity-70' : ''}`}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text className="text-white text-center font-semibold">
+              Join Waitlist
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
+    );
+  }
 
-      <Input
-        label="Email Address"
-        placeholder="Enter your email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        icon={Mail}
-        className="mb-4"
-      />
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1"
+    >
+      <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }}>
+        <View className="w-full max-w-md mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-800 my-auto">
+          {showTitle && (
+            <>
+              <Text className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
+                Join the Waitlist
+              </Text>
+              <Text className="text-gray-600 dark:text-gray-400 text-center mb-6">
+                Get early access to NebulaNet. We&apos;re currently in beta.
+              </Text>
+            </>
+          )}
 
-      <Input
-        label="Referral Code (Optional)"
-        placeholder="Enter referral code"
-        value={referralCode}
-        onChangeText={setReferralCode}
-        className="mb-6"
-      />
+          <View className="space-y-4">
+            <View>
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Email Address *
+              </Text>
+              <TextInput
+                className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
+                placeholder="you@example.com"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                editable={!isSubmitting}
+              />
+            </View>
 
-      <Button
-        title="Join Waitlist"
-        onPress={handleSubmit}
-        loading={isLoading}
-        disabled={!email}
-        className="w-full mb-4"
-      />
+            <View>
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Your Name (Optional)
+              </Text>
+              <TextInput
+                className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
+                placeholder="John Doe"
+                placeholderTextColor="#9CA3AF"
+                value={name}
+                onChangeText={setName}
+                editable={!isSubmitting}
+              />
+            </View>
 
-      <Text className="text-xs text-gray-500 dark:text-gray-400 text-center">
-        By joining, you agree to receive updates about NebulaNet. We respect your privacy.
-      </Text>
-    </View>
+            <View>
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Why are you interested? (Optional)
+              </Text>
+              <TextInput
+                className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white min-h-[80px]"
+                placeholder="Tell us what excites you about NebulaNet..."
+                placeholderTextColor="#9CA3AF"
+                value={reason}
+                onChangeText={setReason}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                editable={!isSubmitting}
+              />
+            </View>
+
+            <TouchableOpacity
+              className={`bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg py-4 mt-2 ${
+                isSubmitting ? 'opacity-70' : ''
+              }`}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text className="text-white ml-2 font-semibold">
+                    Joining...
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-white text-center font-semibold text-lg">
+                  Join Waitlist
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <Text className="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
+              By joining, you agree to receive updates about NebulaNet.
+              We&apos;ll never spam you or share your email.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
+
+export default WaitlistForm;

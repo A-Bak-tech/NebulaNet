@@ -1,7 +1,34 @@
+// assets/icons/index.ts - Update export names
 export { default as HomeIcon } from './home';
 export { default as SearchIcon } from './search';
 export { default as PlusIcon } from './plus';
-export { default as BellIcon } from './bell';
+export { default as BellIcon } from './notification';
 export { default as UserIcon } from './user';
-export { default as AdminIcon } from './admin';
-export { default as AIIcon } from './ai';
+export { default as SettingsIcon } from './settings';
+export { default as CommunityIcon } from './community';
+export { default as BookmarkIcon } from './bookmark';
+export { default as NebulaIcon } from './nebula';
+export { default as ChevronRight } from './chevron-right';
+export { default as CheckIcon } from './check';
+export { default as MessageIcon } from './message';
+export { default as NotificationIcon } from './notification';
+export { default as CommentIcon } from './comment';
+export { default as EchoIcon } from './echo'; // Changed from RetweetIcon
+export { default as LikeIcon } from './like';
+export { default as ShareIcon } from './share';
+export { default as ImageIcon } from './image';
+export { default as VideoIcon } from './video';
+export { default as GlobeIcon } from './globe';
+export { default as SmileIcon } from './smile'; 
+export { default as GlobeIcon } from './globe';
+export { default as SmileIcon } from './smile';
+export { default as LockIcon } from './lock';
+export { default as UsersIcon } from './users';
+export { default as CheckCircleIcon } from './check-circle';
+export { default as EditIcon } from './edit';
+export { default as CalendarIcon } from './calendar';
+export { default as LinkIcon } from './link';
+export { default as LocationIcon } from './location';
+export { default as HashtagIcon } from './hashtag';
+export { default as FilterIcon } from './filter';
+export { default as TrendingUpIcon } from './trending-up';

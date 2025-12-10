@@ -1,69 +1,644 @@
-import React, { createContext, useContext, useReducer } from 'react';
-import { AuthState, AppState } from '@/types/app';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User } from '../types/app';
+import { authService } from '../lib/auth';
+import { supabase } from '../lib/supabase';
 
-type AuthAction =
-  | { type: 'SET_USER'; payload: any }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SIGN_OUT' }
-  | { type: 'UPDATE_USER'; payload: any };
+interface AuthState {
+  user: User | null;
+  session: any | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  isModerator: boolean;
+}
 
-const authReducer = (state: AuthState, action: AuthAction): AuthState => {
-  switch (action.type) {
-    case 'SET_USER':
-      return {
-        ...state,
-        user: action.payload,
+interface AuthContextType extends AuthState {
+  // Authentication
+  login: (email: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    username: string,
+    displayName?: string,
+    waitlistId?: string
+  ) => Promise<void>;
+  logout: () => Promise<void>;
+  
+  // Session
+  refreshSession: () => Promise<void>;
+  checkAuthStatus: () => Promise<boolean>;
+  
+  // Profile Management
+  updateProfile: (updates: Partial<User>) => Promise<void>;
+  uploadProfilePicture: (file: File | Blob, fileName?: string) => Promise<string>;
+  deleteProfilePicture: () => Promise<void>;
+  
+  // Password & Account
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+  updateEmail: (newEmail: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  deactivateAccount: () => Promise<void>;
+  reactivateAccount: () => Promise<void>;
+  
+  // Waitlist
+  joinWaitlist: (email: string, name?: string, reason?: string) => Promise<any>;
+  checkWaitlistStatus: (email: string) => Promise<any>;
+  
+  // User Lookup
+  getUserById: (userId: string) => Promise<User>;
+  getUserByUsername: (username: string) => Promise<User>;
+  searchUsers: (query: string, limit?: number) => Promise<User[]>;
+  
+  // Permissions
+  hasRole: (role: 'user' | 'moderator' | 'admin') => boolean;
+  canAdmin: () => boolean;
+  canModerate: () => boolean;
+  
+  // Utilities
+  getUserId: () => string | null;
+  isOwner: (resourceOwnerId: string) => boolean;
+  getDisplayName: () => string;
+  getAvatarUrl: () => string;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    session: null,
+    isLoading: true,
+    isAuthenticated: false,
+    isAdmin: false,
+    isModerator: false,
+  });
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    initializeAuth();
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+        
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            const userProfile = await getUserProfile(session.user.id);
+            setAuthState({
+              user: userProfile,
+              session,
+              isLoading: false,
+              isAuthenticated: true,
+              isAdmin: userProfile?.role === 'admin',
+              isModerator: userProfile?.role === 'moderator' || userProfile?.role === 'admin',
+            });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setAuthState({
+            user: null,
+            session: null,
+            isLoading: false,
+            isAuthenticated: false,
+            isAdmin: false,
+            isModerator: false,
+          });
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const initializeAuth = async () => {
+    try {
+      const result = await authService.getCurrentSession();
+      
+      if (result.success && result.data) {
+        const { session, profile } = result.data;
+        setAuthState({
+          user: profile,
+          session,
+          isLoading: false,
+          isAuthenticated: true,
+          isAdmin: profile?.role === 'admin',
+          isModerator: profile?.role === 'moderator' || profile?.role === 'admin',
+        });
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+        }));
+      }
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+      setAuthState(prev => ({
+        ...prev,
+        isLoading: false,
+      }));
+    }
+  };
+
+  const getUserProfile = async (userId: string): Promise<User | null> => {
+    try {
+      const result = await authService.getUserById(userId);
+      return result.success ? result.data : null;
+    } catch (error) {
+      console.error('Get user profile error:', error);
+      return null;
+    }
+  };
+
+  // ==================== AUTHENTICATION ====================
+
+  const login = async (email: string, password: string) => {
+    try {
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.login(email, password);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Login failed');
+      }
+
+      const { session, profile } = result.data;
+      setAuthState({
+        user: profile,
+        session,
+        isLoading: false,
         isAuthenticated: true,
-        isLoading: false,
-      };
-    case 'SET_LOADING':
-      return {
-        ...state,
-        isLoading: action.payload,
-      };
-    case 'SIGN_OUT':
-      return {
+        isAdmin: profile?.role === 'admin',
+        isModerator: profile?.role === 'moderator' || profile?.role === 'admin',
+      });
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const register = async (
+    email: string,
+    password: string,
+    username: string,
+    displayName?: string,
+    waitlistId?: string
+  ) => {
+    try {
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.registerUser(
+        email,
+        password,
+        username,
+        displayName,
+        waitlistId
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Registration failed');
+      }
+
+      // Auto-login after registration
+      await login(email, password);
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.logout();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Logout failed');
+      }
+
+      setAuthState({
         user: null,
-        isAuthenticated: false,
-        isLoading: false,
         session: null,
-      };
-    case 'UPDATE_USER':
-      return {
-        ...state,
-        user: { ...state.user, ...action.payload },
-      };
-    default:
-      return state;
+        isLoading: false,
+        isAuthenticated: false,
+        isAdmin: false,
+        isModerator: false,
+      });
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  // ==================== SESSION MANAGEMENT ====================
+
+  const refreshSession = async () => {
+    try {
+      const result = await authService.refreshSession();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Session refresh failed');
+      }
+
+      // Re-initialize auth state
+      await initializeAuth();
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const checkAuthStatus = async (): Promise<boolean> => {
+    try {
+      const result = await authService.getCurrentSession();
+      return result.success && !!result.data;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // ==================== PROFILE MANAGEMENT ====================
+
+  const updateProfile = async (updates: Partial<User>) => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.updateProfile(authState.user.id, updates);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Profile update failed');
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: { ...prev.user!, ...updates },
+        isLoading: false,
+      }));
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const uploadProfilePicture = async (file: File | Blob, fileName?: string): Promise<string> => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.uploadProfilePicture(authState.user.id, file, fileName);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to upload profile picture');
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: { ...prev.user!, avatar_url: result.data },
+        isLoading: false,
+      }));
+
+      return result.data;
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const deleteProfilePicture = async () => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.deleteProfilePicture(authState.user.id);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete profile picture');
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: { ...prev.user!, avatar_url: null },
+        isLoading: false,
+      }));
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  // ==================== PASSWORD & ACCOUNT ====================
+
+  const resetPassword = async (email: string) => {
+    try {
+      const result = await authService.resetPassword(email);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reset password');
+      }
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    try {
+      const result = await authService.updatePassword(newPassword);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update password');
+      }
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const updateEmail = async (newEmail: string) => {
+    try {
+      const result = await authService.updateEmail(newEmail);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update email');
+      }
+
+      // Update local state
+      if (authState.user) {
+        setAuthState(prev => ({
+          ...prev,
+          user: { ...prev.user!, email: newEmail },
+        }));
+      }
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.deleteAccount(authState.user.id);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete account');
+      }
+
+      setAuthState({
+        user: null,
+        session: null,
+        isLoading: false,
+        isAuthenticated: false,
+        isAdmin: false,
+        isModerator: false,
+      });
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const deactivateAccount = async () => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.deactivateAccount(authState.user.id);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to deactivate account');
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: { ...prev.user!, is_active: false },
+        isLoading: false,
+      }));
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  const reactivateAccount = async () => {
+    try {
+      if (!authState.user) throw new Error('No user logged in');
+      
+      setAuthState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await authService.reactivateAccount(authState.user.id);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reactivate account');
+      }
+
+      setAuthState(prev => ({
+        ...prev,
+        user: { ...prev.user!, is_active: true },
+        isLoading: false,
+      }));
+    } catch (error: any) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  };
+
+  // ==================== WAITLIST ====================
+
+  const joinWaitlist = async (email: string, name?: string, reason?: string) => {
+    try {
+      const result = await authService.joinWaitlist(email, name, reason);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to join waitlist');
+      }
+
+      return result.data;
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const checkWaitlistStatus = async (email: string) => {
+    try {
+      const result = await authService.checkWaitlistStatus(email);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to check waitlist status');
+      }
+
+      return result.data;
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  // ==================== USER LOOKUP ====================
+
+  const getUserById = async (userId: string): Promise<User> => {
+    try {
+      const result = await authService.getUserById(userId);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to get user');
+      }
+
+      return result.data;
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const getUserByUsername = async (username: string): Promise<User> => {
+    try {
+      const result = await authService.getUserByUsername(username);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to get user');
+      }
+
+      return result.data;
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const searchUsers = async (query: string, limit: number = 20): Promise<User[]> => {
+    try {
+      const result = await authService.searchUsers(query, limit);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to search users');
+      }
+
+      return result.data;
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  // ==================== PERMISSIONS ====================
+
+  const hasRole = (role: 'user' | 'moderator' | 'admin'): boolean => {
+    return authState.user?.role === role;
+  };
+
+  const canAdmin = (): boolean => {
+    return authState.isAdmin;
+  };
+
+  const canModerate = (): boolean => {
+    return authState.isModerator;
+  };
+
+  // ==================== UTILITIES ====================
+
+  const getUserId = (): string | null => {
+    return authState.user?.id || null;
+  };
+
+  const isOwner = (resourceOwnerId: string): boolean => {
+    return authState.user?.id === resourceOwnerId;
+  };
+
+  const getDisplayName = (): string => {
+    if (!authState.user) return 'Guest';
+    return authState.user.display_name || authState.user.username || 'User';
+  };
+
+  const getAvatarUrl = (): string => {
+    if (!authState.user) return '';
+    
+    return (
+      authState.user.avatar_url ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        getDisplayName()
+      )}&background=random&color=fff&bold=true`
+    );
+  };
+
+  const value: AuthContextType = {
+    // State
+    ...authState,
+    
+    // Authentication
+    login,
+    register,
+    logout,
+    
+    // Session
+    refreshSession,
+    checkAuthStatus,
+    
+    // Profile Management
+    updateProfile,
+    uploadProfilePicture,
+    deleteProfilePicture,
+    
+    // Password & Account
+    resetPassword,
+    updatePassword,
+    updateEmail,
+    deleteAccount,
+    deactivateAccount,
+    reactivateAccount,
+    
+    // Waitlist
+    joinWaitlist,
+    checkWaitlistStatus,
+    
+    // User Lookup
+    getUserById,
+    getUserByUsername,
+    searchUsers,
+    
+    // Permissions
+    hasRole,
+    canAdmin,
+    canModerate,
+    
+    // Utilities
+    getUserId,
+    isOwner,
+    getDisplayName,
+    getAvatarUrl,
+  };
+
+  if (authState.isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white dark:bg-gray-900">
+        <Text className="text-gray-600 dark:text-gray-400">Loading...</Text>
+      </View>
+    );
   }
-};
-
-const initialState: AuthState = {
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  session: null,
-};
-
-const AuthContext = createContext<{
-  state: AuthState;
-  dispatch: React.Dispatch<AuthAction>;
-} | null>(null);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(authReducer, initialState);
 
   return (
-    <AuthContext.Provider value={{ state, dispatch }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuthContext = () => {
+// Import View and Text for loading state
+import { View, Text } from 'react-native';
+
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuthContext must be used within AuthProvider');
+  
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
+  
   return context;
 };
