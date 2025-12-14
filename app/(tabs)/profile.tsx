@@ -1,497 +1,520 @@
-// File: /app/(tabs)/profile.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  Image,
+  StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Alert,
-  Modal,
-  StyleSheet,
+  Alert
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ScreenWrapper, Header } from '../../components/layout';
-import { useAuth } from '../../hooks/useAuth';
-import { usePosts } from '../../hooks/usePosts';
-import { useUser } from '../../hooks/useUser';
-import ProfileHeader from '../../components/profile/ProfileHeader';
-import ProfileStats from '../../components/profile/ProfileStats';
-import ProfileTabs from '../../components/profile/ProfileTabs';
-import EditProfileModal from '../../components/profile/EditProfileModal';
-import { FollowersList } from '../../components/profile/FollowersList';
-import { SettingsIcon, MoreIcon } from '../../assets/icons';
-import { currentTheme } from '../../constants/Colors';
-import { PostCard } from '../../components/post/PostCard';
-import { ProfileSkeleton } from '../../components/profile/ProfileSkeleton';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { 
+  Settings, 
+  Edit, 
+  MapPin, 
+  Link, 
+  Grid, 
+  Heart, 
+  Users,
+  Camera,
+  MoreVertical,
+  MessageCircle,
+  Share
+} from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
 
-export default function ProfileScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const { user: currentUser, updateProfile } = useAuth();
-  
-  const userId = params.id as string || currentUser?.id;
-  const isOwnProfile = userId === currentUser?.id;
-  
-  const { 
-    user, 
-    isLoading: isLoadingUser, 
-    refreshUser,
-    followUser,
-    unfollowUser,
-    isFollowing,
-    followStatus,
-    mutualFollowers,
-    updateProfile: updateUserProfile,
-    acceptFollowRequest,
-    rejectFollowRequest,
-    getFollowRequests,
-  } = useUser(userId);
-  
-  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'echoes'>('posts');
-  const [refreshing, setRefreshing] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showFollowModal, setShowFollowModal] = useState(false);
-  const [followModalType, setFollowModalType] = useState<'followers' | 'following'>('followers');
-  const [followRequests, setFollowRequests] = useState<any[]>([]);
-  const [showFollowRequests, setShowFollowRequests] = useState(false);
-  
-  // Fetch posts based on active tab
-  const { 
-    posts, 
-    isLoading: isLoadingPosts, 
-    refreshPosts,
-    loadMore,
-    hasMore,
-  } = usePosts({ 
-    userId: activeTab === 'posts' ? userId : undefined,
-    type: activeTab,
+const ProfileScreen = () => {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [stats, setStats] = useState({
+    posts: 0,
+    followers: 0,
+    following: 0,
+    likes: 0
   });
-  
-  // Load follow requests for private accounts
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('posts');
+
   useEffect(() => {
-    if (isOwnProfile && user?.is_private) {
-      loadFollowRequests();
-    }
-  }, [isOwnProfile, user?.is_private]);
-  
-  const loadFollowRequests = async () => {
+    loadUserData();
+    fetchProfileData();
+    
+    // Set up real-time subscription for posts
+    const subscription = supabase
+      .channel('posts-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'posts',
+          filter: `user_id=eq.${user?.id}`
+        }, 
+        () => {
+          fetchProfileData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [user?.id]);
+
+  const loadUserData = async () => {
     try {
-      const requests = await getFollowRequests();
-      setFollowRequests(requests);
-    } catch (error) {
-      console.error('Error loading follow requests:', error);
-    }
-  };
-  
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([refreshUser(), refreshPosts()]);
-      if (isOwnProfile && user?.is_private) {
-        await loadFollowRequests();
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to refresh');
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const fetchProfileData = async () => {
+    if (!user?.id) return;
+
+    try {
+      setLoading(true);
+      
+      // Fetch user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      setProfile(profileData);
+
+      // Fetch posts
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (postsError) throw postsError;
+      setPosts(postsData || []);
+
+      // Fetch stats
+      const [followersCount, followingCount, likesCount] = await Promise.all([
+        supabase
+          .from('follows')
+          .select('id', { count: 'exact', head: true })
+          .eq('followed_id', user.id),
+        supabase
+          .from('follows')
+          .select('id', { count: 'exact', head: true })
+          .eq('follower_id', user.id),
+        supabase
+          .from('likes')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+      ]);
+
+      setStats({
+        posts: postsData?.length || 0,
+        followers: followersCount.count || 0,
+        following: followingCount.count || 0,
+        likes: likesCount.count || 0
+      });
+
+    } catch (error) {
+      console.error('Error fetching profile data:', error);
+      Alert.alert('Error', 'Failed to load profile data');
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   };
-  
-  const handleFollow = async () => {
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchProfileData();
+  };
+
+  const handleEditProfile = () => {
+    // Navigate to edit profile screen
+    // router.push('/edit-profile');
+  };
+
+  const handleShareProfile = async () => {
     try {
-      if (isFollowing) {
-        await unfollowUser();
-      } else {
-        await followUser();
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update follow status');
+      // Share profile link
+      // await Share.share({
+      //   message: `Check out ${profile?.username}'s profile on NebulaNet!`,
+      //   url: `https://nebulanet.app/profile/${profile?.username}`,
+      // });
+    } catch (error) {
+      console.error('Error sharing profile:', error);
     }
   };
-  
-  const handleSaveProfile = async (updates: any) => {
-    try {
-      if (isOwnProfile && currentUser) {
-        await updateProfile(updates);
-        Alert.alert('Success', 'Profile updated successfully');
-      } else if (user) {
-        await updateUserProfile(updates);
-        Alert.alert('Success', 'Profile updated successfully');
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update profile');
-      throw error;
+
+  const handleSettings = () => {
+    // Navigate to settings
+    // router.push('/settings');
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
     }
-  };
-  
-  const handleOpenFollowers = () => {
-    setFollowModalType('followers');
-    setShowFollowModal(true);
-  };
-  
-  const handleOpenFollowing = () => {
-    setFollowModalType('following');
-    setShowFollowModal(true);
-  };
-  
-  const handleUserPress = (targetUserId: string) => {
-    setShowFollowModal(false);
-    if (targetUserId === currentUser?.id) {
-      router.replace('/profile');
-    } else {
-      router.push(`/profile?id=${targetUserId}`);
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
     }
+    return num.toString();
   };
-  
-  const handleAcceptFollowRequest = async (followerId: string) => {
-    try {
-      await acceptFollowRequest(followerId);
-      setFollowRequests(prev => prev.filter(req => req.follower_id !== followerId));
-      Alert.alert('Success', 'Follow request accepted');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to accept request');
-    }
-  };
-  
-  const handleRejectFollowRequest = async (followerId: string) => {
-    try {
-      await rejectFollowRequest(followerId);
-      setFollowRequests(prev => prev.filter(req => req.follower_id !== followerId));
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to reject request');
-    }
-  };
-  
-  const handlePostPress = (postId: string) => {
-    router.push(`/post/${postId}`);
-  };
-  
-  const renderContent = () => {
-    if (isLoadingUser) {
-      return <ProfileSkeleton />;
-    }
-    
-    if (!user) {
-      return (
-        <View className="flex-1 items-center justify-center p-6">
-          <Text className="text-text-primary text-xl font-semibold mb-2">
-            User not found
-          </Text>
-          <Text className="text-text-secondary text-center">
-            This user may have deactivated their account
-          </Text>
-          <TouchableOpacity 
-            className="mt-4 px-6 py-2 bg-brand-primary rounded-full"
-            onPress={() => router.back()}
-          >
-            <Text className="text-white font-semibold">Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
+
+  const tabs = [
+    { id: 'posts', label: 'Posts', icon: Grid },
+    { id: 'media', label: 'Media', icon: Camera },
+    { id: 'likes', label: 'Likes', icon: Heart },
+  ];
+
+  if (loading && !refreshing) {
     return (
-      <>
-        <ProfileHeader
-          user={user}
-          isOwnProfile={isOwnProfile}
-          onEditProfile={() => setShowEditModal(true)}
-          onFollow={followUser}
-          onUnfollow={unfollowUser}
-          isFollowing={isFollowing}
-          followStatus={followStatus}
-          onMessage={() => router.push(`/messages/${userId}`)}
-          mutualFollowers={mutualFollowers}
-        />
-        
-        <ProfileStats
-          userId={userId}
-          followingCount={user.following_count || 0}
-          followersCount={user.followers_count || 0}
-          postsCount={user.posts_count || 0}
-          echoesCount={user.echoes_count || 0}
-          likesCount={user.likes_count || 0}
-          onPressFollowers={handleOpenFollowers}
-          onPressFollowing={handleOpenFollowing}
-        />
-        
-        {/* Follow Requests Banner for Private Accounts */}
-        {isOwnProfile && followRequests.length > 0 && (
-          <TouchableOpacity
-            className="mx-4 mt-4 p-3 bg-surface border border-border rounded-lg"
-            onPress={() => setShowFollowRequests(true)}
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center">
-                <Text className="text-text-primary font-semibold">
-                  {followRequests.length} follow request{followRequests.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
-              <MoreIcon size={20} color={currentTheme.icon.primary} />
-            </View>
-            <Text className="text-text-secondary text-sm mt-1">
-              Tap to review
-            </Text>
-          </TouchableOpacity>
-        )}
-        
-        <ProfileTabs
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          postsCount={user.posts_count || 0}
-          likesCount={user.likes_count || 0}
-          echoesCount={user.echoes_count || 0}
-        />
-        
-        {renderTabContent()}
-      </>
-    );
-  };
-  
-  const renderTabContent = () => {
-    if (isLoadingPosts && !refreshing) {
-      return (
-        <View className="py-12 items-center">
-          <ActivityIndicator size="small" color={currentTheme.brand.primary} />
-          <Text className="text-text-secondary mt-2">Loading posts...</Text>
-        </View>
-      );
-    }
-    
-    if (posts.length === 0) {
-      return (
-        <View className="py-12 items-center px-6">
-          <Text className="text-text-primary text-lg font-semibold mb-2">
-            {getEmptyStateTitle()}
-          </Text>
-          <Text className="text-text-secondary text-center mb-6">
-            {getEmptyStateDescription()}
-          </Text>
-          {isOwnProfile && activeTab === 'posts' && (
-            <TouchableOpacity 
-              className="px-6 py-3 bg-brand-primary rounded-full"
-              onPress={() => router.push('/(tabs)/create')}
-            >
-              <Text className="text-white font-semibold">Create your first post</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      );
-    }
-    
-    return (
-      <View className="pb-20">
-        {posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onPress={() => handlePostPress(post.id)}
-            showActions
-            compact
-          />
-        ))}
-        
-        {/* Load More Indicator */}
-        {hasMore && (
-          <View className="py-4 items-center">
-            <ActivityIndicator size="small" color={currentTheme.brand.primary} />
-            <Text className="text-text-secondary text-sm mt-2">Loading more...</Text>
-          </View>
-        )}
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
-  };
-  
-  const getEmptyStateTitle = () => {
-    switch (activeTab) {
-      case 'posts':
-        return isOwnProfile ? 'No posts yet' : 'No posts';
-      case 'likes':
-        return isOwnProfile ? 'No likes yet' : 'No likes';
-      case 'echoes':
-        return isOwnProfile ? 'No echoes yet' : 'No echoes';
-      default:
-        return 'No content';
-    }
-  };
-  
-  const getEmptyStateDescription = () => {
-    switch (activeTab) {
-      case 'posts':
-        return isOwnProfile 
-          ? 'When you create posts, they will appear here.'
-          : 'This user hasn\'t posted anything yet.';
-      case 'likes':
-        return isOwnProfile
-          ? 'Posts you like will appear here.'
-          : 'This user hasn\'t liked any posts yet.';
-      case 'echoes':
-        return isOwnProfile
-          ? 'Posts you echo will appear here.'
-          : 'This user hasn\'t echoed any posts yet.';
-      default:
-        return '';
-    }
-  };
-  
-  const renderFollowRequestsModal = () => (
-    <Modal
-      visible={showFollowRequests}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowFollowRequests(false)}
-    >
-      <View style={[styles.modalContainer, { backgroundColor: currentTheme.background.primary }]}>
-        <View className="px-4 py-3 border-b border-border">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xl font-semibold text-text-primary">
-              Follow Requests ({followRequests.length})
-            </Text>
-            <TouchableOpacity onPress={() => setShowFollowRequests(false)}>
-              <Text className="text-brand-primary text-base">Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        <ScrollView className="flex-1">
-          {followRequests.map((request) => (
-            <View key={request.id} className="px-4 py-3 border-b border-border">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center flex-1">
-                  <TouchableOpacity
-                    onPress={() => handleUserPress(request.follower.id)}
-                    className="flex-row items-center flex-1"
-                  >
-                    <View className="w-12 h-12 rounded-full bg-surface overflow-hidden">
-                      {request.follower.avatar_url ? (
-                        <Image
-                          source={{ uri: request.follower.avatar_url }}
-                          className="w-full h-full"
-                        />
-                      ) : (
-                        <Text className="text-text-primary text-lg font-bold m-auto">
-                          {request.follower.display_name?.[0] || request.follower.username?.[0]}
-                        </Text>
-                      )}
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text className="text-text-primary font-semibold">
-                        {request.follower.display_name || request.follower.username}
-                      </Text>
-                      <Text className="text-text-secondary text-sm">
-                        @{request.follower.username}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-                
-                <View className="flex-row space-x-2">
-                  <TouchableOpacity
-                    className="px-4 py-2 bg-brand-primary rounded-full"
-                    onPress={() => handleAcceptFollowRequest(request.follower.id)}
-                  >
-                    <Text className="text-white font-semibold">Accept</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="px-4 py-2 border border-border rounded-full"
-                    onPress={() => handleRejectFollowRequest(request.follower.id)}
-                  >
-                    <Text className="text-text-primary font-semibold">Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-  
+  }
+
   return (
-    <ScreenWrapper withBottomNav>
-      <Header
-        title={isOwnProfile ? "Profile" : (user?.display_name || user?.username || "Profile")}
-        showBackButton={!isOwnProfile}
-        rightAction={
-          isOwnProfile ? {
-            icon: <SettingsIcon size={24} color={currentTheme.icon.primary} />,
-            onPress: () => router.push('/settings'),
-          } : undefined
-        }
-      />
-      
-      <ScrollView 
-        className="flex-1"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={currentTheme.brand.primary}
-            colors={[currentTheme.brand.primary]}
-          />
-        }
-        onScroll={({ nativeEvent }) => {
-          if (nativeEvent.layoutMeasurement.height + nativeEvent.contentOffset.y >= 
-              nativeEvent.contentSize.height - 20) {
-            if (hasMore && !isLoadingPosts) {
-              loadMore();
-            }
-          }
-        }}
-        scrollEventThrottle={400}
-      >
-        {renderContent()}
-      </ScrollView>
-      
-      {/* Edit Profile Modal */}
-      {user && (
-        <EditProfileModal
-          visible={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleSaveProfile}
-          user={user}
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={['#007AFF']}
+          tintColor="#007AFF"
         />
-      )}
-      
-      {/* Followers/Following Modal */}
-      <Modal
-        visible={showFollowModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowFollowModal(false)}
-      >
-        <View style={[styles.modalContainer, { backgroundColor: currentTheme.background.primary }]}>
-          <View className="px-4 py-3 border-b border-border">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xl font-semibold text-text-primary">
-                {followModalType === 'followers' ? 'Followers' : 'Following'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowFollowModal(false)}>
-                <Text className="text-brand-primary text-base">Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          <FollowersList
-            userId={userId}
-            type={followModalType}
-            onUserPress={handleUserPress}
-            showActions={!isOwnProfile}
-          />
+      }
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.username}>@{profile?.username || 'username'}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.iconButton} onPress={handleShareProfile}>
+            <Share size={20} color="#000" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={handleSettings}>
+            <Settings size={20} color="#000" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
+            <Edit size={16} color="#fff" />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-      
-      {/* Follow Requests Modal */}
-      {renderFollowRequestsModal()}
-    </ScreenWrapper>
+      </View>
+
+      {/* User Info */}
+      <View style={styles.userInfo}>
+        <Image
+          source={{ 
+            uri: profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username}`
+          }}
+          style={styles.avatar}
+          defaultSource={require('@/assets/images/default-avatar.png')}
+        />
+        
+        <Text style={styles.displayName}>
+          {profile?.full_name || 'Explorer of the digital nebula'}
+        </Text>
+        
+        {profile?.location && (
+          <View style={styles.location}>
+            <MapPin size={16} color="#666" />
+            <Text style={styles.locationText}>{profile.location}</Text>
+          </View>
+        )}
+        
+        {profile?.website && (
+          <TouchableOpacity style={styles.website}>
+            <Link size={16} color="#007AFF" />
+            <Text style={styles.websiteText}>{profile.website}</Text>
+          </TouchableOpacity>
+        )}
+        
+        <Text style={styles.joinDate}>
+          Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { 
+            month: 'long', 
+            year: 'numeric' 
+          }) : 'December 2024'}
+        </Text>
+      </View>
+
+      {/* Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{formatNumber(stats.posts)}</Text>
+          <Text style={styles.statLabel}>Posts</Text>
+        </View>
+        <TouchableOpacity style={styles.statItem}>
+          <Text style={styles.statValue}>{formatNumber(stats.followers)}</Text>
+          <Text style={styles.statLabel}>Followers</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.statItem}>
+          <Text style={styles.statValue}>{formatNumber(stats.following)}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.statItem}>
+          <Text style={styles.statValue}>{formatNumber(stats.likes)}</Text>
+          <Text style={styles.statLabel}>Likes</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.tab, activeTab === tab.id && styles.activeTab]}
+              onPress={() => setActiveTab(tab.id)}
+            >
+              <Icon size={20} color={activeTab === tab.id ? '#007AFF' : '#666'} />
+              <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Content Grid */}
+      <View style={styles.contentGrid}>
+        {activeTab === 'posts' && posts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Grid size={48} color="#e0e0e0" />
+            <Text style={styles.emptyStateTitle}>No posts yet</Text>
+            <Text style={styles.emptyStateText}>
+              When you share photos and videos, they'll appear here.
+            </Text>
+            <TouchableOpacity 
+              style={styles.createPostButton}
+              // onPress={() => router.push('/create')}
+            >
+              <Text style={styles.createPostButtonText}>Create your first post</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {posts.slice(0, 6).map((post, index) => (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.gridItem}
+                // onPress={() => router.push(`/post/${post.id}`)}
+              >
+                <Image
+                  source={{ uri: post.media_url?.[0] || require('@/assets/images/placeholder.jpg') }}
+                  style={styles.gridImage}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  modalContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  username: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  userInfo: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 16,
+    backgroundColor: '#f0f0f0',
+  },
+  displayName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  location: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  website: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  websiteText: {
+    fontSize: 14,
+    color: '#007AFF',
+  },
+  joinDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  statItem: {
+    alignItems: 'center',
     flex: 1,
   },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#007AFF',
+  },
+  contentGrid: {
+    minHeight: 400,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    maxWidth: 300,
+  },
+  createPostButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  createPostButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 1,
+  },
+  gridItem: {
+    width: '33.333%',
+    aspectRatio: 1,
+    padding: 1,
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f0f0f0',
+  },
 });
+
+export default ProfileScreen;

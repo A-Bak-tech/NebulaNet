@@ -1,19 +1,38 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "module": "ESNext",
     "strict": true,
     "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+      "@/*": ["./*"],
+      "@components/*": ["./components/*"],
+      "@lib/*": ["./lib/*"],
+      "@types/*": ["./types/*"],
+      "@constants/*": ["./constants/*"],
+      "@utils/*": ["./utils/*"],
+      "@hooks/*": ["./hooks/*"],
+      "@contexts/*": ["./contexts/*"],
+      "@assets/*": ["./assets/*"],
+      "@app/*": ["./app/*"]
+    },
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "types": ["react-native"],
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "scripts/evaluate-models.js"  ]
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
 }

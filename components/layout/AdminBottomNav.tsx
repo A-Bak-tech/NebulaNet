@@ -7,10 +7,15 @@ import {
   Search, 
   PlusCircle, 
   Bell, 
-  User 
+  User,
+  Settings
 } from 'lucide-react-native';
 
-const BottomNav = () => {
+interface AdminBottomNavProps {
+  onMenuPress: () => void;
+}
+
+const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ onMenuPress }) => {
   const router = useRouter();
   const pathname = usePathname();
   const colors = useThemeColors();
@@ -41,10 +46,10 @@ const BottomNav = () => {
       label: 'Notifications',
     },
     {
-      id: 'profile',
-      icon: User,
-      route: '/(tabs)/profile',
-      label: 'Profile',
+      id: 'menu',
+      icon: Settings,
+      action: onMenuPress,
+      label: 'Menu',
     },
   ];
 
@@ -54,8 +59,12 @@ const BottomNav = () => {
     return pathname === route;
   };
 
-  const handlePress = (route: string) => {
-    router.push(route);
+  const handlePress = (tab: any) => {
+    if (tab.action) {
+      tab.action();
+    } else {
+      router.push(tab.route);
+    }
   };
 
   const styles = StyleSheet.create({
@@ -80,6 +89,15 @@ const BottomNav = () => {
     activeIconContainer: {
       backgroundColor: colors.ui.primaryLight,
     },
+    adminBadge: {
+      position: 'absolute',
+      top: 4,
+      right: 20,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.status.warning,
+    },
   });
 
   return (
@@ -87,12 +105,13 @@ const BottomNav = () => {
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab.route);
+        const isMenuButton = tab.id === 'menu';
         
         return (
           <TouchableOpacity
             key={tab.id}
             style={styles.tab}
-            onPress={() => handlePress(tab.route)}
+            onPress={() => handlePress(tab)}
           >
             <View style={[
               styles.iconContainer,
@@ -104,6 +123,8 @@ const BottomNav = () => {
                 fill={active ? colors.ui.primary : 'none'}
               />
             </View>
+            
+            {isMenuButton && <View style={styles.adminBadge} />}
           </TouchableOpacity>
         );
       })}
@@ -111,4 +132,4 @@ const BottomNav = () => {
   );
 };
 
-export default BottomNav;
+export default AdminBottomNav;

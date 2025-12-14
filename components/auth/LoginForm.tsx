@@ -7,7 +7,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext'; // Update this import
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -20,7 +20,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   onForgotPassword,
   onSignUp,
 }) => {
-  const { login } = useAuth();
+  const { login } = useAuth(); // This should now work with your AuthContext
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

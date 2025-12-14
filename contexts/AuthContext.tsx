@@ -1,10 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { View, Text } from 'react-native';
 import { User } from '../types/app';
 import { authService } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
+// Helper type for auth service responses
+interface AuthSessionResponse {
+  session: any;
+  profile: User | null;
+}
+
+// Use your existing User type - it already has role
+type AppUser = User & {
+  is_active?: boolean;
+};
+
 interface AuthState {
-  user: User | null;
+  user: AppUser | null;
   session: any | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -29,7 +41,7 @@ interface AuthContextType extends AuthState {
   checkAuthStatus: () => Promise<boolean>;
   
   // Profile Management
-  updateProfile: (updates: Partial<User>) => Promise<void>;
+  updateProfile: (updates: Partial<AppUser>) => Promise<void>;
   uploadProfilePicture: (file: File | Blob, fileName?: string) => Promise<string>;
   deleteProfilePicture: () => Promise<void>;
   
@@ -46,9 +58,9 @@ interface AuthContextType extends AuthState {
   checkWaitlistStatus: (email: string) => Promise<any>;
   
   // User Lookup
-  getUserById: (userId: string) => Promise<User>;
-  getUserByUsername: (username: string) => Promise<User>;
-  searchUsers: (query: string, limit?: number) => Promise<User[]>;
+  getUserById: (userId: string) => Promise<AppUser>;
+  getUserByUsername: (username: string) => Promise<AppUser>;
+  searchUsers: (query: string, limit?: number) => Promise<AppUser[]>;
   
   // Permissions
   hasRole: (role: 'user' | 'moderator' | 'admin') => boolean;
@@ -90,14 +102,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (session?.user) {
             const userProfile = await getUserProfile(session.user.id);
-            setAuthState({
-              user: userProfile,
-              session,
-              isLoading: false,
-              isAuthenticated: true,
-              isAdmin: userProfile?.role === 'admin',
-              isModerator: userProfile?.role === 'moderator' || userProfile?.role === 'admin',
-            });
+            if (userProfile) {
+              setAuthState({
+                user: userProfile,
+                session,
+                isLoading: false,
+                isAuthenticated: true,
+                isAdmin: userProfile.role === 'admin',
+                isModerator: userProfile.role === 'moderator' || userProfile.role === 'admin',
+              });
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           setAuthState({
@@ -122,15 +136,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const result = await authService.getCurrentSession();
       
       if (result.success && result.data) {
-        const { session, profile } = result.data;
-        setAuthState({
-          user: profile,
-          session,
-          isLoading: false,
-          isAuthenticated: true,
-          isAdmin: profile?.role === 'admin',
-          isModerator: profile?.role === 'moderator' || profile?.role === 'admin',
-        });
+        const { session, profile } = result.data as AuthSessionResponse;
+        if (profile) {
+          const appUser: AppUser = {
+            ...profile,
+            is_active: (profile as any).is_active ?? true,
+          };
+          
+          setAuthState({
+            user: appUser,
+            session,
+            isLoading: false,
+            isAuthenticated: true,
+            isAdmin: appUser.role === 'admin',
+            isModerator: appUser.role === 'moderator' || appUser.role === 'admin',
+          });
+        } else {
+          setAuthState(prev => ({
+            ...prev,
+            isLoading: false,
+          }));
+        }
       } else {
         setAuthState(prev => ({
           ...prev,
@@ -146,10 +172,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const getUserProfile = async (userId: string): Promise<User | null> => {
+  const getUserProfile = async (userId: string): Promise<AppUser | null> => {
     try {
       const result = await authService.getUserById(userId);
-      return result.success ? result.data : null;
+      
+      if (result.success && result.data) {
+        const user = result.data as User;
+        return {
+          ...user,
+          is_active: (user as any).is_active ?? true,
+        };
+      }
+      return null;
     } catch (error) {
       console.error('Get user profile error:', error);
       return null;
@@ -168,14 +202,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(result.error || 'Login failed');
       }
 
-      const { session, profile } = result.data;
+      const { session, profile } = result.data as AuthSessionResponse;
+      if (!profile) {
+        throw new Error('No user profile returned');
+      }
+
+      const appUser: AppUser = {
+        ...profile,
+        is_active: (profile as any).is_active ?? true,
+      };
+
       setAuthState({
-        user: profile,
+        user: appUser,
         session,
         isLoading: false,
         isAuthenticated: true,
-        isAdmin: profile?.role === 'admin',
-        isModerator: profile?.role === 'moderator' || profile?.role === 'admin',
+        isAdmin: appUser.role === 'admin',
+        isModerator: appUser.role === 'moderator' || appUser.role === 'admin',
       });
     } catch (error: any) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
@@ -265,7 +308,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // ==================== PROFILE MANAGEMENT ====================
 
-  const updateProfile = async (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<AppUser>) => {
     try {
       if (!authState.user) throw new Error('No user logged in');
       
@@ -279,7 +322,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setAuthState(prev => ({
         ...prev,
-        user: { ...prev.user!, ...updates },
+        user: { 
+          ...prev.user!, 
+          ...updates,
+        },
         isLoading: false,
       }));
     } catch (error: any) {
@@ -300,13 +346,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(result.error || 'Failed to upload profile picture');
       }
 
+      const avatarUrl = result.data || '';
+
       setAuthState(prev => ({
         ...prev,
-        user: { ...prev.user!, avatar_url: result.data },
+        user: { ...prev.user!, avatar_url: avatarUrl },
         isLoading: false,
       }));
 
-      return result.data;
+      return avatarUrl;
     } catch (error: any) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
       throw error;
@@ -486,35 +534,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // ==================== USER LOOKUP ====================
 
-  const getUserById = async (userId: string): Promise<User> => {
+  const getUserById = async (userId: string): Promise<AppUser> => {
     try {
       const result = await authService.getUserById(userId);
       
-      if (!result.success) {
+      if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to get user');
       }
 
-      return result.data;
+      const user = result.data as User;
+      return {
+        ...user,
+        is_active: (user as any).is_active ?? true,
+      };
     } catch (error: any) {
       throw error;
     }
   };
 
-  const getUserByUsername = async (username: string): Promise<User> => {
+  const getUserByUsername = async (username: string): Promise<AppUser> => {
     try {
       const result = await authService.getUserByUsername(username);
       
-      if (!result.success) {
+      if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to get user');
       }
 
-      return result.data;
+      const user = result.data as User;
+      return {
+        ...user,
+        is_active: (user as any).is_active ?? true,
+      };
     } catch (error: any) {
       throw error;
     }
   };
 
-  const searchUsers = async (query: string, limit: number = 20): Promise<User[]> => {
+  const searchUsers = async (query: string, limit: number = 20): Promise<AppUser[]> => {
     try {
       const result = await authService.searchUsers(query, limit);
       
@@ -522,7 +578,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(result.error || 'Failed to search users');
       }
 
-      return result.data;
+      const users = (result.data || []) as User[];
+      return users.map(user => ({
+        ...user,
+        is_active: (user as any).is_active ?? true,
+      }));
     } catch (error: any) {
       throw error;
     }
@@ -535,11 +595,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const canAdmin = (): boolean => {
-    return authState.isAdmin;
+    // Check if user has admin role
+    if (authState.user?.role === 'admin') return true;
+    
+    // Hardcoded admin check for you (the only admin)
+    const adminEmails = ['your-admin-email@example.com'];
+    const adminUserIds = ['your-user-id-here'];
+    
+    if (authState.user?.email && adminEmails.includes(authState.user.email)) return true;
+    if (authState.user?.id && adminUserIds.includes(authState.user.id)) return true;
+    
+    return false;
   };
 
   const canModerate = (): boolean => {
-    return authState.isModerator;
+    return authState.user?.role === 'moderator' || authState.user?.role === 'admin';
   };
 
   // ==================== UTILITIES ====================
@@ -617,8 +687,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   if (authState.isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white dark:bg-gray-900">
-        <Text className="text-gray-600 dark:text-gray-400">Loading...</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+        <Text style={{ color: '#666' }}>Loading...</Text>
       </View>
     );
   }
@@ -629,9 +699,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-// Import View and Text for loading state
-import { View, Text } from 'react-native';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
