@@ -1,0 +1,148 @@
+{
+  "expo": {
+    "name": "NebulaNet",
+    "slug": "NebulaNet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    
+    // Scheme for deep linking (add this)
+    "scheme": "nebulanet",
+    
+    // Extra configuration for deep linking
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
+    },
+    
+    "splash": {
+      "image": "./assets/images/splash-screen-c.jpg",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nebulanet.app",
+      
+      // iOS deep linking configuration
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["nebulanet"],
+            "CFBundleURLName": "NebulaNet Deep Links"
+          }
+        ],
+        "NSPhotoLibraryUsageDescription": "NebulaNet needs access to your photo library to let you share photos.",
+        "NSCameraUsageDescription": "NebulaNet needs access to your camera to let you take photos.",
+        "NSPhotoLibraryAddUsageDescription": "NebulaNet needs to save photos to your library.",
+        "NSMicrophoneUsageDescription": "NebulaNet needs access to your microphone for video recording.",
+        "NSContactsUsageDescription": "NebulaNet needs access to your contacts to help you invite friends."
+      },
+      
+      // For push notifications (if needed)
+      "usesAppleSignIn": true
+    },
+    
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/1024_1024 icon c.jpg",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.nebulanet.app",
+      "versionCode": 1,
+      
+      // Android deep linking configuration
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "nebulanet",
+              "host": "*"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "nebulanet.space",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "*.nebulanet.space",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
+      
+      // Permissions
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS"
+      ]
+    },
+    
+    "web": {
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    
+    // Plugins for required features
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NebulaNet needs access to your photos to let you share them with your friends.",
+          "cameraPermission": "NebulaNet needs access to your camera to let you take photos for your posts."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow NebulaNet to access your contacts to help you invite friends."
+        }
+      ],
+      [
+        "expo-sms",
+        {
+          "smsPermission": "Allow NebulaNet to send SMS invites to your friends."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1DA1F2",
+          "sounds": ["./assets/sounds/notification.wav"]
+        }
+      ],
+      "expo-secure-store"
+    ],
+    
+    // OTA updates configuration
+    "updates": {
+      "url": "https://u.expo.dev/your-project-id",
+      "fallbackToCacheTimeout": 0
+    },
+    
+    // Runtime version for OTA updates
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
+  }
+}
